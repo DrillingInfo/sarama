@@ -25,9 +25,9 @@ type ErrorReporter interface {
 	Errorf(string, ...interface{})
 }
 
-// ValueChecker is a function type to be set in each expectation of the producer mocks
-// to check the value passed.
-type ValueChecker func(val []byte) error
+// MessageChecker is a function type to be set in each expectation of the producer mocks
+// to check the topic, key, and value passed.
+type MessageChecker func(topic string, key []byte, val []byte) error
 
 var (
 	errProduceSuccess              error = nil
@@ -39,7 +39,7 @@ const AnyOffset int64 = -1000
 
 type producerExpectation struct {
 	Result        error
-	CheckFunction ValueChecker
+	CheckFunction MessageChecker
 }
 
 type consumerExpectation struct {

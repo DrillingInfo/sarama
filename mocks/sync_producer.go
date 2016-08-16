@@ -46,11 +46,19 @@ func (sp *SyncProducer) SendMessage(msg *sarama.ProducerMessage) (partition int3
 		expectation := sp.expectations[0]
 		sp.expectations = sp.expectations[1:]
 		if expectation.CheckFunction != nil {
-			if val, err := msg.Value.Encode(); err != nil {
-				sp.t.Errorf("Input message encoding failed: %s", err.Error())
+			var key []byte
+			var err error
+			if msg.Key != nil {
+				key, err = msg.Key.Encode()
+			}
+			if err != nil {
+				sp.t.Errorf("Input message key encoding failed: %s", err.Error())
+				return -1, -1, err
+			} else if val, err := msg.Value.Encode(); err != nil {
+				sp.t.Errorf("Input message value encoding failed: %s", err.Error())
 				return -1, -1, err
 			} else {
-				err := expectation.CheckFunction(val)
+				err := expectation.CheckFunction(msg.Topic, key, val)
 				if err != nil {
 					sp.t.Errorf("Check function returned an error: %s", err.Error())
 					return -1, -1, err
@@ -117,7 +125,7 @@ func (sp *SyncProducer) Close() error {
 // will be called. The mock producer will first call the given function to check the message value.
 // It will cascade the error of the function, if any, or handle the message as if it produced
 // successfully, i.e. by returning a valid partition, and offset, and a nil error.
-func (sp *SyncProducer) ExpectSendMessageWithCheckerFunctionAndSucceed(cf ValueChecker) {
+func (sp *SyncProducer) ExpectSendMessageWithCheckerFunctionAndSucceed(cf MessageChecker) {
 	sp.l.Lock()
 	defer sp.l.Unlock()
 	sp.expectations = append(sp.expectations, &producerExpectation{Result: errProduceSuccess, CheckFunction: cf})
@@ -127,7 +135,7 @@ func (sp *SyncProducer) ExpectSendMessageWithCheckerFunctionAndSucceed(cf ValueC
 // called. The mock producer will first call the given function to check the message value.
 // It will cascade the error of the function, if any, or handle the message as if it failed
 // to produce successfully, i.e. by returning the provided error.
-func (sp *SyncProducer) ExpectSendMessageWithCheckerFunctionAndFail(cf ValueChecker, err error) {
+func (sp *SyncProducer) ExpectSendMessageWithCheckerFunctionAndFail(cf MessageChecker, err error) {
 	sp.l.Lock()
 	defer sp.l.Unlock()
 	sp.expectations = append(sp.expectations, &producerExpectation{Result: err, CheckFunction: cf})

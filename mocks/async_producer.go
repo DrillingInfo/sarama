@@ -55,11 +55,19 @@ func NewAsyncProducer(t ErrorReporter, config *sarama.Config) *AsyncProducer {
 				expectation := mp.expectations[0]
 				mp.expectations = mp.expectations[1:]
 				if expectation.CheckFunction != nil {
-					if val, err := msg.Value.Encode(); err != nil {
-						mp.t.Errorf("Input message encoding failed: %s", err.Error())
+					var key []byte
+					var err error
+					if msg.Key != nil {
+						key, err = msg.Key.Encode()
+					}
+					if err != nil {
+						mp.t.Errorf("Input message key encoding failed: %s", err.Error())
+						mp.errors <- &sarama.ProducerError{Err: err, Msg: msg}
+					} else if val, err := msg.Value.Encode(); err != nil {
+						mp.t.Errorf("Input message value encoding failed: %s", err.Error())
 						mp.errors <- &sarama.ProducerError{Err: err, Msg: msg}
 					} else {
-						err = expectation.CheckFunction(val)
+						err = expectation.CheckFunction(msg.Topic, key, val)
 						if err != nil {
 							mp.t.Errorf("Check function returned an error: %s", err.Error())
 							mp.errors <- &sarama.ProducerError{Err: err, Msg: msg}
@@ -141,7 +149,7 @@ func (mp *AsyncProducer) Errors() <-chan *sarama.ProducerError {
 // the message value. If an error is returned it will be made available on the Errors channel
 // otherwise the mock will handle the message as if it produced successfully, i.e. it will make
 // it available on the Successes channel if the Producer.Return.Successes setting is set to true.
-func (mp *AsyncProducer) ExpectInputWithCheckerFunctionAndSucceed(cf ValueChecker) {
+func (mp *AsyncProducer) ExpectInputWithCheckerFunctionAndSucceed(cf MessageChecker) {
 	mp.l.Lock()
 	defer mp.l.Unlock()
 	mp.expectations = append(mp.expectations, &producerExpectation{Result: errProduceSuccess, CheckFunction: cf})
@@ -152,7 +160,7 @@ func (mp *AsyncProducer) ExpectInputWithCheckerFunctionAndSucceed(cf ValueChecke
 // check the message value. If an error is returned it will be made available on the Errors channel
 // otherwise the mock will handle the message as if it failed to produce successfully. This means
 // it will make a ProducerError available on the Errors channel.
-func (mp *AsyncProducer) ExpectInputWithCheckerFunctionAndFail(cf ValueChecker, err error) {
+func (mp *AsyncProducer) ExpectInputWithCheckerFunctionAndFail(cf MessageChecker, err error) {
 	mp.l.Lock()
 	defer mp.l.Unlock()
 	mp.expectations = append(mp.expectations, &producerExpectation{Result: err, CheckFunction: cf})

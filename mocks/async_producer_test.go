@@ -10,8 +10,8 @@ import (
 	"github.com/Shopify/sarama"
 )
 
-func generateRegexpChecker(re string) func([]byte) error {
-	return func(val []byte) error {
+func generateRegexpChecker(re string) func(string, []byte, []byte) error {
+	return func(topic string, key []byte, val []byte) error {
 		matched, err := regexp.MatchString(re, string(val))
 		if err != nil {
 			return errors.New("Error while trying to match the input message with the expected pattern: " + err.Error())
